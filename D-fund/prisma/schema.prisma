@@ -1,0 +1,584 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  firstName     String?
+  lastName      String?
+  name          String?  // Full name (computed or stored)
+  password      String?  // Nullable if using OAuth only
+  role          UserRole @default(USER)
+  bio           String?
+  profilePic    String?
+  headerImage   String?
+  phone         String?
+  city          String?
+  country       String?
+  linkedinUrl   String?
+  website       String?
+  visibility    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  btoCProfile    BtoCProfile?
+  btoBProfile    BtoBProfile?
+  opportunities  Opportunity[]
+  applications   Application[]
+  sentMessages   Message[]      @relation("SentMessages")
+  receivedMessages Message[]    @relation("ReceivedMessages")
+  privateDiscussions Participant[] @relation("PrivateDiscussionParticipants")
+  publicDiscussions PublicDiscussion[]
+  ratings        Rating[]
+  tasks          Task[]
+  referralCodes  ReferralCode[]
+  followers      Follow[]       @relation("Follower")
+  following      Follow[]       @relation("Following")
+  savedOpportunities SavedOpportunity[]
+  likedOpportunities LikedOpportunity[]
+  
+  @@index([email])
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  // OWNER n'est pas un rôle séparé, mais un User qui a créé des opportunités
+  // On peut déterminer si un User est Owner en vérifiant s'il a des opportunities
+}
+
+// ============================================
+// PROFILES
+// ============================================
+
+model BtoCProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Profile details
+  description     String?  @db.Text
+  tags            String[] // Skills, interests, etc.
+  industries      String[] // Industries of interest
+  marketFocus     String[] // Geographic markets
+  languages       String[]
+  businessSkills  String[]
+  techSkills      String[]
+  seniorityLevel  String?  // Junior, Mid, Senior, etc.
+  
+  // Metrics
+  opportunitiesCount     Int @default(0)
+  activeOpportunitiesCount Int @default(0)
+  followersCount         Int @default(0)
+  avgRating              Float?
+  roundedRating          Int?
+  profileSharedCount     Int @default(0)
+  
+  // Preferences
+  lookingForOpportunities Boolean @default(true)
+  remote                  Boolean?
+  countries               String[]
+  regions                 String[]
+  opportunityTypes        String[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("bto_c_profiles")
+}
+
+model BtoBProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Company details
+  companyName     String
+  logo            String?
+  headerImage     String?
+  punchline       String?
+  description     String?  @db.Text
+  longDescription String?  @db.Text
+  website         String?
+  linkedinUrl     String?
+  city            String?
+  country         String?
+  foundationDate  DateTime?
+  
+  // Business details
+  developmentStage String? // Ideation, MVP, Growth, Scale
+  industries       String[]
+  marketFocus      String[]
+  
+  // Metrics
+  followersCount      Int @default(0)
+  opportunitiesCount  Int @default(0)
+  profileSharedCount  Int @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("bto_b_profiles")
+}
+
+// ============================================
+// OPPORTUNITIES
+// ============================================
+
+model Opportunity {
+  id              String   @id @default(cuid())
+  name            String
+  punchline       String?
+  description     String?   @db.Text
+  type            OpportunityType
+  featureId       String?   // Reference to Feature type
+  status          OpportunityStatus @default(DRAFT)
+  
+  // Owner
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id])
+  
+  // Location & Details
+  city            String?
+  country         String?
+  region          String?
+  remote          Boolean?
+  startDate       DateTime?
+  endDate         DateTime?
+  expirationDate  DateTime?
+  
+  // Application Process
+  applicationProcessId String?
+  applicationProcess  ApplicationProcess? @relation(fields: [applicationProcessId], references: [id])
+  needToCheckApplicant Boolean @default(false)
+  
+  // Media
+  image           String?
+  backgroundImage String?
+  file            String? // Attachments
+  
+  // Additional Info
+  url             String?
+  tags            String[]
+  industries      String[]
+  markets         String[]
+  
+  // Pricing (for paid opportunities)
+  price           Float?
+  currency        String?
+  pricingUnit     String? // per hour, per month, etc.
+  pricingDetails  String? @db.Text
+  
+  // AI Generated Content
+  aiGenerated     Boolean @default(false)
+  aiPrompt        String? @db.Text
+  aiOutput        String? @db.Text
+  
+  // Metrics
+  applicationsCount   Int @default(0)
+  likesCount          Int @default(0)
+  messagesCount       Int @default(0)
+  savedCount          Int @default(0)
+  sharedCount         Int @default(0)
+  viewsCount          Int @default(0)
+  
+  // Premium Features
+  boosted            Boolean @default(false)
+  boostedUntil       DateTime?
+  qualified          Boolean @default(false)
+  
+  // Referral
+  referralAvailable  Boolean @default(false)
+  referralAmount     Float?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  applications   Application[]
+  publicDiscussions PublicDiscussion[]
+  referralCodes  ReferralCode[]
+  savedBy        SavedOpportunity[]
+  likedBy        LikedOpportunity[]
+
+  @@index([ownerId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+  @@map("opportunities")
+}
+
+enum OpportunityType {
+  JOB_OPPORTUNITY
+  TALENT_PROFILE
+  CO_FOUNDER_OPPORTUNITY
+  CO_FOUNDER_PROFILE
+  BUSINESS_IDEA
+  SUPPORT_OFFER
+  SERVICE_LISTING
+  SERVICE_REQUEST
+  DEAL_FLOW
+  INVESTOR_THESIS
+  INVESTOR_PROFILE
+  FUNDING_OPPORTUNITY
+  EVENT
+  CALL_FOR_STARTUPS
+  MENTORSHIP_BA_OFFER
+  PROJECT_SEEKING_SUPPORT
+  VENTURE_PROGRAM
+  CHILL_WORK_SPOT
+  MARKET_ADVISOR
+}
+
+enum OpportunityStatus {
+  DRAFT
+  PENDING
+  ACTIVE
+  ARCHIVED
+  CLOSED
+}
+
+model ApplicationProcess {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?  @db.Text
+  candidateDescription String? @db.Text
+  
+  opportunities   Opportunity[]
+  
+  @@map("application_processes")
+}
+
+// ============================================
+// APPLICATIONS
+// ============================================
+
+model Application {
+  id              String   @id @default(cuid())
+  opportunityId   String
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  
+  candidateId     String
+  candidate       User     @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  
+  // Application Content
+  title           String?
+  goalLetter      String?  @db.Text
+  submissionDate  DateTime?
+  
+  // Status & Workflow
+  stage           ApplicationStage @default(DRAFT)
+  isClosed        Boolean  @default(false)
+  isDraft         Boolean  @default(true)
+  
+  // Owner Review
+  reviewDate      DateTime?
+  reviewFeedback  String?  @db.Text
+  feedbackTitle   String?
+  
+  // Referral
+  referralCodeUsed String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([opportunityId, candidateId])
+  @@index([candidateId])
+  @@index([opportunityId])
+  @@index([stage])
+  @@map("applications")
+}
+
+enum ApplicationStage {
+  DRAFT
+  SUBMITTED
+  OWNER_REVIEW
+  READY_TO_SUBMIT
+  SUCCESS
+  ARCHIVED
+}
+
+// ============================================
+// MESSAGING
+// ============================================
+
+model Message {
+  id              String   @id @default(cuid())
+  content         String   @db.Text
+  
+  senderId        String
+  sender          User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId      String?
+  receiver        User?    @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  // Discussion context
+  privateDiscussionId String?
+  privateDiscussion   PrivateDiscussion? @relation(fields: [privateDiscussionId], references: [id], onDelete: Cascade)
+  
+  publicDiscussionId String?
+  publicDiscussion    PublicDiscussion? @relation(fields: [publicDiscussionId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([privateDiscussionId])
+  @@index([publicDiscussionId])
+  @@map("messages")
+}
+
+model PrivateDiscussion {
+  id              String   @id @default(cuid())
+  participants    Participant[] @relation("PrivateDiscussionParticipants")
+  messages        Message[]
+  lastMessageAt   DateTime?
+  unreadCount     Int      @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("private_discussions")
+}
+
+model Participant {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation("PrivateDiscussionParticipants", fields: [userId], references: [id], onDelete: Cascade)
+  discussionId    String
+  discussion      PrivateDiscussion @relation("PrivateDiscussionParticipants", fields: [discussionId], references: [id], onDelete: Cascade)
+  
+  joinedAt        DateTime @default(now())
+
+  @@unique([userId, discussionId])
+  @@map("participants")
+}
+
+model PublicDiscussion {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?  @db.Text
+  image           String?
+  type            DiscussionType @default(OPEN_FORUM)
+  
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  opportunityId   String?
+  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  
+  messages        Message[]
+  messagesCount   Int      @default(0)
+  membersCount    Int      @default(0)
+  likesCount      Int      @default(0)
+  lastMessageAt   DateTime?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([opportunityId])
+  @@index([type])
+  @@map("public_discussions")
+}
+
+enum DiscussionType {
+  OPEN_FORUM
+  OPPORTUNITY_RELATED
+}
+
+// ============================================
+// SOCIAL FEATURES
+// ============================================
+
+model Follow {
+  id              String   @id @default(cuid())
+  followerId      String
+  follower        User     @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId     String
+  following       User     @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model SavedOpportunity {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId   String
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, opportunityId])
+  @@map("saved_opportunities")
+}
+
+model LikedOpportunity {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  opportunityId   String
+  opportunity     Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  
+  createdAt     DateTime @default(now())
+
+  @@unique([userId, opportunityId])
+  @@map("liked_opportunities")
+}
+
+model Rating {
+  id              String   @id @default(cuid())
+  itemId          String   // Can be opportunity, user, etc.
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating          Int      // 1-5 typically
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([itemId, userId])
+  @@index([itemId])
+  @@map("ratings")
+}
+
+// ============================================
+// TASKS
+// ============================================
+
+model Task {
+  id              String   @id @default(cuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  relatedItemId   String?  // Can be opportunity, application, etc.
+  relatedItemType String?  // "opportunity", "application", etc.
+  
+  name            String
+  description     String?  @db.Text
+  status          TaskStatus @default(TODO)
+  dueDate         DateTime?
+  url             String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("tasks")
+}
+
+enum TaskStatus {
+  TODO
+  WORKING_ON_IT
+  IDEA
+  DONE
+}
+
+// ============================================
+// REFERRAL SYSTEM
+// ============================================
+
+model ReferralCode {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  ownerId         String
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  
+  // Context
+  opportunityId   String?
+  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  
+  // Referral Details
+  type            ReferralType?
+  status          ReferralStatus @default(PENDING)
+  amount          Float?
+  
+  // Metrics
+  usesCount       Int      @default(0)
+  potentialAmount Float?   @default(0)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([code])
+  @@map("referral_codes")
+}
+
+enum ReferralType {
+  NEW_USER
+  TALENT_HUNT
+  OPPORTUNITY_RELATED
+}
+
+enum ReferralStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+// ============================================
+// REFERENCE DATA
+// ============================================
+
+model Industry {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?  @db.Text
+  opportunitiesCount Int    @default(0)
+  
+  @@map("industries")
+}
+
+model Market {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  image           String?
+  
+  @@map("markets")
+}
+
+model Feature {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?  @db.Text
+  category        String?  // Main category
+  order           Int?
+  
+  // AI Configuration
+  aiPrompt        String?  @db.Text
+  seekerName      String?
+  creatorName     String?
+  seekerScenario  String?  @db.Text
+  creatorScenario String? @db.Text
+  
+  // Settings
+  displayType     String?  // Post, Gallery, Map, etc.
+  noApplicationNeeded Boolean @default(false)
+  
+  opportunitiesCount Int   @default(0)
+  
+  @@map("features")
+}
