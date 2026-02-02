@@ -1,6 +1,22 @@
 {
-  "/resources/page": "app/resources/page.js",
-  "/resources/talents/page": "app/resources/talents/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/about/page": "app/about/page.js",
+  "/applications/[id]/page": "app/applications/[id]/page.js",
+  "/applications/page": "app/applications/page.js",
+  "/explore/page": "app/explore/page.js",
+  "/community/page": "app/community/page.js",
+  "/dashboard/page": "app/dashboard/page.js",
+  "/opportunities/[id]/page": "app/opportunities/[id]/page.js",
+  "/opportunities/new/page": "app/opportunities/new/page.js",
   "/page": "app/page.js",
-  "/about/page": "app/about/page.js"
+  "/profiles/page": "app/profiles/page.js",
+  "/register/page": "app/register/page.js",
+  "/resources/investors/page": "app/resources/investors/page.js",
+  "/resources/mentors/page": "app/resources/mentors/page.js",
+  "/resources/page": "app/resources/page.js",
+  "/resources/programs/page": "app/resources/programs/page.js",
+  "/resources/talents/page": "app/resources/talents/page.js",
+  "/resources/tools/page": "app/resources/tools/page.js",
+  "/login/page": "app/login/page.js",
+  "/profile/page": "app/profile/page.js"
 }
